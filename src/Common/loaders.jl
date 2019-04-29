@@ -83,6 +83,8 @@ function load_from_pdb(i_file::String, compile_metadata = true)::Tuple{State, Me
             elseif compile_metadata && startswith(line, "CONECT")
                 elem = split(line)
                 atoms[parse(Int64, elem[2])].connects = map(x -> parse(Int64, x), elem[3:end])
+                #! does not update bakwards. If 371 is connect of 372, 372 may not be connect of 371!
+                #! To fix this, open pymol of protein and use 'set pdb_connect_all, 1'
             end
         end
     end
@@ -379,6 +381,9 @@ function compile_sidechains(dihedrals::Vector{Dihedral})::Vector{Vector{Dihedral
     end
 
     all_sidechain_dihedrals = filter(x -> x.dtype > Common.DIHEDRAL.omega, dihedrals)
+    if length(all_sidechain_dihedrals) == 0
+        return Vector{Vector{Dihedral}}()
+    end
     cur_res                 = all_sidechain_dihedrals[1].residue
     cur_res_index           = 1
     sidechain_dihedrals     = Vector{Dihedral}()

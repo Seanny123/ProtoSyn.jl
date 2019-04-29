@@ -41,11 +41,13 @@ function amber_cr_cg_evaluator!(st::Common.State, do_forces::Bool)::Float64
     amber_e                       = Forcefield.Amber.evaluate!(amber_topology, st, cut_off=1.2, do_forces=do_forces)
     contact_e                     = Forcefield.Restraints.evaluate!(contact_restraints, st, do_forces=do_forces)
     sol_e                         = Forcefield.CoarseGrain.evaluate!(solv_pairs, st, do_forces=do_forces)
-    hb_e                          = Forcefield.CoarseGrain.evaluate!(hb_groups, st, do_forces=do_forces)
+    hb_e                          = Forcefield.CoarseGrain.evaluate!(hb_network, st, do_forces=do_forces)
     st.energy.comp["amber"]       = amber_e
-    st.energy.comp["coarseGrain"] = contact_e + sol_e + hb_e
-    st.energy.eTotal              = amber_e + contact_e + sol_e + hb_e
-    return amber_e + contact_e + sol_e + hb_e
+    cg                            = contact_e + sol_e + hb_e
+    st.energy.comp["coarseGrain"] = cg
+    et                            = amber_e + cg
+    st.energy.eTotal              = et
+    return et
 end
 
 # Main evaluator function for Monte Carlo in Search stages
@@ -57,7 +59,7 @@ function amber_cr_cg_evaluator_nc!(st::Common.State, do_forces::Bool)::Float64
     amber_e                      += Forcefield.Amber.evaluate!(amber_topology.dihedralsCos, st, do_forces = do_forces)
     contact_e                     = Forcefield.Restraints.evaluate!(contact_restraints, st, do_forces=do_forces)
     sol_e                         = Forcefield.CoarseGrain.evaluate!(solv_pairs, st, do_forces=do_forces)
-    hb_e                          = Forcefield.CoarseGrain.evaluate!(hb_groups, st, do_forces=do_forces)
+    hb_e                          = Forcefield.CoarseGrain.evaluate!(hb_network, st, do_forces=do_forces)
     st.energy.comp["amber"]       = amber_e
     st.energy.comp["coarseGrain"] = contact_e + sol_e + hb_e
     st.energy.eTotal              = amber_e + contact_e + sol_e + hb_e
@@ -80,6 +82,7 @@ sampler_minimizer = Drivers.SteepestDescent.Driver(amber_cr_dr_evaluator!, n_ref
 soft_dh_mutator = Mutators.Dihedral.DihedralMutator(nb_dhs, () -> (randn() * soft_dh_mutator.step_size), soft_dh_p_mut, soft_dh_step_s)
 soft_cs_mutator = Mutators.Crankshaft.CrankshaftMutator(nb_phi_dhs, () -> (randn() * soft_cs_mutator.step_size), soft_cs_p_mut, soft_cs_step_s)
 soft_br_mutator = Mutators.Blockrot.BlockrotMutator(metadata.blocks, () -> (randn() * soft_br_mutator.step_size), soft_br_p_mut, soft_br_step_s, soft_br_tr_step_s, soft_br_tries, loop_closer)
+soft_sc_mutator = Mutators.Sidechain.SidechainMutator(sidechains, rot_lib, soft_sc_p_mut)
 
 # REGULAR MUTATORS (For ILSRR inner cycle search)
 reg_dh_mutator  = Mutators.Dihedral.DihedralMutator(nb_dhs, () -> (randn() * reg_dh_mutator.step_size), reg_dh_p_mut, reg_dh_step_s)
@@ -93,11 +96,12 @@ hard_cs_mutator = Mutators.Crankshaft.CrankshaftMutator(nb_phi_dhs, () -> (randn
 # SAMPLERS ----
 # SOFT SAMPLER (For MonteCarlo refinement)
 function dh_cs_br_soft_sampler!(st::Common.State)
+    sc = Mutators.Sidechain.run!(st, soft_sc_mutator)
     dm = Mutators.Dihedral.run!(st, soft_dh_mutator)
     cm = Mutators.Crankshaft.run!(st, soft_cs_mutator)
     bm = Mutators.Blockrot.run!(st, soft_br_mutator)
     sampler_minimizer.run!(st, sampler_minimizer)
-    return Dict("d" => dm, "c" => cm, "b" => bm)
+    return Dict("d" => dm, "c" => cm, "b" => bm, "sc" => sc)
 end
 
 # REGULAR SAMPLER (For ILSRR inner cycle search)
@@ -120,7 +124,7 @@ end
 # DRIVERS ----
 # Search Stage
 i_search_driver = Drivers.MonteCarlo.Driver(dh_cs_reg_sampler!, amber_cr_cg_evaluator_nc!, i_search_temp_init,
-    n_i_search_steps, evaluate_slope_every, evaluate_slope_threshold,true, print_status_mc, quench_temperature,
+    n_i_search_steps, evaluate_slope_every, evaluate_slope_threshold, false, print_status_mc, quench_temperature,
     print_energy_components, adjust_step_size)
 
 search_driver   = Drivers.ILSRR.Driver(i_search_driver, amber_cr_cg_evaluator_nc!, dh_cs_hard_sampler!,
@@ -130,4 +134,4 @@ search_driver   = Drivers.ILSRR.Driver(i_search_driver, amber_cr_cg_evaluator_nc
 # Refinement Stage
 refine_driver   = Drivers.MonteCarlo.Driver(dh_cs_br_soft_sampler!, amber_cr_cg_evaluator!, refine_temp_static,
     n_refine_steps, evaluate_slope_every, evaluate_slope_threshold,true, print_status_refnm, print_structure_best,
-    print_structure_rfnm)
+    print_structure_rfnm, print_energy_components)

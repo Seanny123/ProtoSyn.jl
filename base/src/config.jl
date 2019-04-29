@@ -52,6 +52,8 @@ const hard_cs_p_mut            = 0.1    # Mutation probability for crankshaft mo
 const soft_br_p_mut            = 0.15   # Mutation probability for blockrot movements in the Monte Carlo Refinement;
 const soft_br_tries            = 10     # Number of attempts to rotate a block after it was accepted by p_mut;
 
+const soft_sc_p_mut            = 0.032  # Mutation probability for sidechain movements in Monte Carlo Refinement;
+
 # Steepest Descent parameters (convergence criteria and max step size):
 const max_step                 = 1e-2   # Maximum step allowed in Steepest Descent;
 const f_tol                    = 0.1    # Minimum force tolerated. The minimization is considered converged when forces are below the defined value;
@@ -84,6 +86,8 @@ const input_contact_map        = "data/contact_map_raptorx_PRT.txt"
 const input_amber_json         = "data/PRT_amber_no_sc_top.json"
 const ref_native               = "data/PRT_native.pdb"
 const conf_pdb                 = "sample.pdb" # Conformation PDF file for Refinement stages
+const rotamer_library          = "data/rotamer_library.json"
+const sc_hb_lib                = "data/sc_hb_lib.json"
 
 # Output destination:
 const log_destination          = stdout
