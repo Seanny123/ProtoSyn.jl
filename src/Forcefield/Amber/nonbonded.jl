@@ -1,9 +1,9 @@
 macro force_switch_coefA(α::Int)
-    :(α * ($(α+4)*rc - $(α+1)*r1) / (rc^$(α+2) * (rc-r1)^2))
+    esc(:(α * ($(α+4)*rc - $(α+1)*r1) / (rc^$(α+2) * (rc-r1)^2)))
 end
 
 macro force_switch_coefB(α::Int)
-    :(α * ($(α+3)*rc - $(α+1)*r1) / (rc^$(α+2) * (rc-r1)^3))
+    esc(:(α * ($(α+3)*rc - $(α+1)*r1) / (rc^$(α+2) * (rc-r1)^3)))
 end
 
 macro nonbonded(args...)

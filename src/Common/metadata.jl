@@ -28,26 +28,32 @@ AtomMetadata(name=H1, elem=H1, res_num=1, res_name=UNK, chain_id=nothing, connec
 Base.@kwdef mutable struct AtomMetadata
 
     # Parameter                             Default
-    index::Int64                            = 0
+    index::Int64                            = -1
     name::String                            = "X"
-    elem::String                            = "X"
-    res_num::Int64                          = 1
-    res_name::String                        = "UNK"
+    symbol::String                          = "X"
     residue::Union{Residue, Nothing}        = nothing
-    chain_id::Union{String, Nothing}        = nothing
     connects::Union{Vector{Int64}, Nothing} = nothing
 
     # AtomMetadata(;index::Int64 = 0, name::String = "_", elem::String = name, res_num::Int64 = 1, res_name::String = "UNK", residue = nothing, chain_id::Union{String, Nothing} = nothing, connects::Union{Vector{Int64}, Nothing} = nothing) = new(index, name, elem, res_num, res_name, residue, chain_id, connects)
 end
-function Base.show(io::IO, b::AtomMetadata) #SHOULD BE IMPROVED
-    if b.chain_id != nothing && b.connects != nothing
-        print(io, "AtomMetadata(index = $(b.index), name=$(b.name), elem=$(b.elem), res_num=$(b.res_num), res_name=$(b.res_name), chain_id=$(b.chain_id), connects=$(b.connects))")
-    elseif b.chain_id != nothing
-        print(io, "AtomMetadata(index = $(b.index), name=$(b.name), elem=$(b.elem), res_num=$(b.res_num), res_name=$(b.res_name), chain_id=$(b.chain_id), connects=nothing)")
-    elseif b.connects != nothing
-        print(io, "AtomMetadata(index = $(b.index), name=$(b.name), elem=$(b.elem), res_num=$(b.res_num), res_name=$(b.res_name), chain_id=nothing, connects=$(b.connects))")
-    else
-        print(io, "AtomMetadata(index = $(b.index), name=$(b.name), elem=$(b.elem), res_num=$(b.res_num), res_name=$(b.res_name), chain_id=nothing, connects=nothing)")
+# function Base.show(io::IO, b::AtomMetadata) #SHOULD BE IMPROVED
+#     if b.chain_id != nothing && b.connects != nothing
+#         print(io, "AtomMetadata(index = $(b.index), name=$(b.name), elem=$(b.elem), res_num=$(b.res_num), res_name=$(b.res_name), chain_id=$(b.chain_id), connects=$(b.connects))")
+#     elseif b.chain_id != nothing
+#         print(io, "AtomMetadata(index = $(b.index), name=$(b.name), elem=$(b.elem), res_num=$(b.res_num), res_name=$(b.res_name), chain_id=$(b.chain_id), connects=nothing)")
+#     elseif b.connects != nothing
+#         print(io, "AtomMetadata(index = $(b.index), name=$(b.name), elem=$(b.elem), res_num=$(b.res_num), res_name=$(b.res_name), chain_id=nothing, connects=$(b.connects))")
+#     else
+#         print(io, "AtomMetadata(index = $(b.index), name=$(b.name), elem=$(b.elem), res_num=$(b.res_num), res_name=$(b.res_name), chain_id=nothing, connects=nothing)")
+#     end
+# end
+
+function Base.show(io::IO, b::AtomMetadata)
+    print(io, string(typeof(b)))
+    for p in fieldnames(typeof(b))
+        v = getproperty(b,p)
+        s = v != nothing ? v : "nothing"
+        print(io, "\n   $(String(p)) = $v")
     end
 end
 
@@ -133,46 +139,115 @@ end
 Base.show(io::IO, b::BlockMetadata) = print(io, "BlockMetadata(atoms=$(b.atoms[1])<->$(b.atoms[length(b.atoms)]), pivot=$(b.pivot), range_left=$(b.range_left), connector_left=$(b.connector_left), connector_right=$(b.connector_right))")
 
 
-@doc raw"""
-    Metadata([, atoms::Vector{AtomMetadata} = [], ss::Vector{SecondaryStructureMetadata} = [], residues::Vector{Residue} = [], dihedrals::Vector{Dihedral} = [], blocks::Vector{BlockMetadata} = [], sidechains::Vector{SidechainMetadata} = []])
-
-Define the state metadata, containing extra information regarding the atoms and secondary structure of the system.
-
-# Examples
-```julia-repl
-julia> Metadata(atoms, ss, residues, dihedrals, blocks, sidechains)
-Metadata(atoms=(...), ss=(...), residues=(...), dihedrals=(...), blocks=(...), sidechains=(...))
-
-julia> Metadata()
-Metadata(atoms=AtomMetadata[], ss=SecondaryStructureMetadata[], residues=Residue[], dihedrals = Diehdral[], blocks=[], sidechains=[])
-```
-"""
-Base.@kwdef mutable struct Metadata
-
-    atoms::Vector{AtomMetadata}            = Vector{AtomMetadata}()
-    ss::Vector{SecondaryStructureMetadata} = Vector{SecondaryStructureMetadata}()
-    residues::Vector{Residue}              = Vector{Residue}()
-    dihedrals::Vector{Dihedral}            = Vector{Dihedral}()
-    blocks::Vector{BlockMetadata}          = Vector{BlockMetadata}()
+struct SpanningTree
+    size::Int
+    table::Vector{Vector{Int}}
+    stack::Vector{Int}
+    indices::Vector{Int}
+    visited::BitVector
 end
-Base.show(io::IO, b::Metadata) = print(io, "Metadata(atoms=$(b.atoms), ss=$(b.ss), residues=$(b.residues), dihedrals=$(b.dihedrals))")
+SpanningTree(table::Vector{Vector{Int}}) = begin
+    n = length(table)
+    visited = BitVector(undef, n)
+    SpanningTree(n, table, zeros(Int, n), zeros(Int, n), visited)
+end
 
+function getindex(tree::SpanningTree, pivot::Int)
+    if (pivot < 1) || (pivot > tree.size)
+        return 0
+    end
+    tree.visited .= false
 
-@doc raw"""
-    renumber_residues!(atoms::Vector{AtomMetadata}[, start::Int64 = 1])
+    j = 1
+    ptr = 1
+    tree.stack[ptr] = pivot
+    @inbounds while ptr > 0
+        id = tree.stack[ptr]
+        ptr -= 1
+        if !tree.visited[id]
+            tree.visited[id] = true
+            tree.indices[j] = id
+            j += 1
+            for i in tree.table[id]
+                ptr += 1
+                tree.stack[ptr] = i
+            end
+        end
+    end
+    j-1
+end
 
-Iterate over an array of AtomMetadata objects and renumber the list of `res_num` (starting at `start`).
+# @doc raw"""
+#     Metadata([, atoms::Vector{AtomMetadata} = [], ss::Vector{SecondaryStructureMetadata} = [], residues::Vector{Residue} = [], dihedrals::Vector{Dihedral} = [], blocks::Vector{BlockMetadata} = [], sidechains::Vector{SidechainMetadata} = []])
 
-# Examples
-```julia-repl
-julia> renumber_residues!(state.metadata.atoms)
-```
-See also: [`AtomMetadata`](@ref)
-"""
-function renumber_residues!(atoms::Vector{AtomMetadata}, start::Int64 = 1)
+# Define the state metadata, containing extra information regarding the atoms and secondary structure of the system.
 
-    i_res_num::Int64 = atoms[1].res_num
-    for (index, atom) in enumerate(atoms)
-        atom.res_num = atom.res_num - i_res_num + start
+# # Examples
+# ```julia-repl
+# julia> Metadata(atoms, ss, residues, dihedrals, blocks, sidechains)
+# Metadata(atoms=(...), ss=(...), residues=(...), dihedrals=(...), blocks=(...), sidechains=(...))
+
+# julia> Metadata()
+# Metadata(atoms=AtomMetadata[], ss=SecondaryStructureMetadata[], residues=Residue[], dihedrals = Diehdral[], blocks=[], sidechains=[])
+# ```
+# """
+mutable struct Metadata
+    atoms::Union{Nothing,Vector{AtomMetadata}}
+    residues::Union{Nothing,Vector{Residue}}
+    chains::Union{Nothing,Vector{Residue}}
+    stree::Union{Nothing,SpanningTree}
+end
+
+Metadata(; atoms=nothing, residues=nothing, chains=nothing, stree=nothing) = begin
+    if atoms != nothing
+        # connectivity table
+        #   atom i is connected to j is j>i
+        table = [filter(x->x > at.index, at.connects) for at in atoms]
+        stree = SpanningTree(table)
+    end
+    Metadata(atoms, residues, chains, stree)
+end
+
+Base.show(io::IO, b::Metadata) = begin
+    print(io, "Metadata")
+    for p in (:atoms, :residues, :chains)
+        v = getproperty(b,p)
+        s = v == nothing ? "n.d." : " list with $(length(v)) items"
+        print(io, "\n   $(String(p)) = $s")
     end
 end
+
+# Base.@kwdef mutable struct Metadata
+
+#     mst::Union{Nothing,Vector{Vector{Int}}} = nothing
+#     atoms::Vector{AtomMetadata}            = Vector{AtomMetadata}()
+#     residues::Vector{Residue}              = Vector{Residue}()
+#     # chains::Vector{Chain}
+
+#     #ss::Vector{SecondaryStructureMetadata} = Vector{SecondaryStructureMetadata}()
+#     #dihedrals::Vector{Dihedral}            = Vector{Dihedral}()
+#     #blocks::Vector{BlockMetadata}          = Vector{BlockMetadata}()
+# end
+
+
+# Base.show(io::IO, b::Metadata) = print(io, "Metadata(atoms=$(b.atoms), ss=$(b.ss), residues=$(b.residues), dihedrals=$(b.dihedrals))")
+
+
+# @doc raw"""
+#     renumber_residues!(atoms::Vector{AtomMetadata}[, start::Int64 = 1])
+
+# Iterate over an array of AtomMetadata objects and renumber the list of `res_num` (starting at `start`).
+
+# # Examples
+# ```julia-repl
+# julia> renumber_residues!(state.metadata.atoms)
+# ```
+# See also: [`AtomMetadata`](@ref)
+# """
+# function renumber_residues!(atoms::Vector{AtomMetadata}, start::Int64 = 1)
+
+#     i_res_num::Int64 = atoms[1].res_num
+#     for (index, atom) in enumerate(atoms)
+#         atom.res_num = atom.res_num - i_res_num + start
+#     end
+# end

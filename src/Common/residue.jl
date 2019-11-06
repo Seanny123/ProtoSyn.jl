@@ -2,13 +2,13 @@
 #                                                RESIDUE
 
 #Common.SS.HELIX | Common.SS.SHEET
-module SS
-@enum TYPE begin
-    COIL  = 0
-    HELIX = 1
-    SHEET = 2
-end
-end
+# module SS
+# @enum TYPE begin
+#     COIL  = 0
+#     HELIX = 1
+#     SHEET = 2
+# end
+# end
 
 
 @doc raw"""
@@ -29,15 +29,25 @@ Common.Residue(atoms=[1, 2, 3, 4], next=V, name=E)
 ```
 """
 Base.@kwdef mutable struct Residue
-    atoms::Vector{Int64}
-    next::Union{Residue, Int64, Nothing}
-    name::String
+    #atoms::Vector{Int64}
+    #next::Union{Residue, Int64, Nothing}
+    index::Int = -1
+    name::String = "UNK"
     ss::SS.TYPE = SS.COIL
 end
 function Base.show(io::IO, b::Residue)
-    if b.next == nothing
-        print(io, "Common.Residue(atoms=$(b.atoms), next=nothing, name=$(b.name), ss=$(b.ss))")
-    else
-        print(io, "Common.Residue(atoms=$(b.atoms), next=$(b.next.name), name=$(b.name), ss=$(b.ss))")
+    print(io, string(typeof(b)))
+    for p in fieldnames(typeof(b))
+        val = getproperty(b,p)
+        print(io, "\n   $(String(p)) = $(val!=nothing ? val : "nothing")")
     end
 end
+
+
+# function Base.show(io::IO, b::Residue)
+#     if b.next == nothing
+#         print(io, "Common.Residue(atoms=$(b.atoms), next=nothing, name=$(b.name), ss=$(b.ss))")
+#     else
+#         print(io, "Common.Residue(atoms=$(b.atoms), next=$(b.next.name), name=$(b.name), ss=$(b.ss))")
+#     end
+# end

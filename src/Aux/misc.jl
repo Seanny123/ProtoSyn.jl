@@ -14,12 +14,39 @@ julia> Aux.rotation_matrix_from_axis_angle([1.1, 2.2, 3.3], π/2)
 See also: [`rotate_dihedral!`](@ref Common)
 """
 function rotation_matrix_from_axis_angle(axis::Vector{Float64}, angle::Float64)
+    # q0 = cos(0.5 * angle)
+    # q1, q2, q3 = sin(0.5 * angle) * axis ./ norm(axis)
+    λ = sin(0.5 * angle) / norm(axis)
     q0 = cos(0.5 * angle)
-    q1, q2, q3 = sin(0.5 * angle) * axis ./ norm(axis)
+    q1 = λ * axis[1]
+    q2 = λ * axis[2]
+    q3 = λ * axis[3]
     [1-2*q2*q2-2*q3*q3   2*q1*q2-2*q0*q3   2*q1*q3+2*q0*q2;
        2*q2*q1+2*q0*q3 1-2*q3*q3-2*q1*q1   2*q2*q3-2*q0*q1;
        2*q3*q1-2*q0*q2   2*q3*q2+2*q0*q1 1-2*q1*q1-2*q2*q2]
 end
+
+
+function rotation_matrix_from_axis_angle(axis::Vector{Float64}, angle::Float64, R::Array{Float64, 2})
+    # q0 = cos(0.5 * angle)
+    # q1, q2, q3 = sin(0.5 * angle) * axis ./ norm(axis)
+    λ = sin(0.5 * angle) / norm(axis)
+    q0 = cos(0.5 * angle)
+    q1 = λ * axis[1]
+    q2 = λ * axis[2]
+    q3 = λ * axis[3]
+    R[1,1] = 1-2*q2*q2-2*q3*q3
+    R[1,2] =   2*q1*q2-2*q0*q3
+    R[1,3] =   2*q1*q3+2*q0*q2
+    R[2,1] =   2*q2*q1+2*q0*q3
+    R[2,2] = 1-2*q3*q3-2*q1*q1
+    R[2,3] =   2*q2*q3-2*q0*q1
+    R[3,1] =   2*q3*q1-2*q0*q2
+    R[3,2] =   2*q3*q2+2*q0*q1
+    R[3,3] = 1-2*q1*q1-2*q2*q2
+    R
+end
+
 
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------
 

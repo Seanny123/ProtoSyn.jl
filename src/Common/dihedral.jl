@@ -2,18 +2,18 @@
 #                                                DIHEDRAL
 
 #Common.DTYPE.phi | Common.DTYPE.chi5
-module DIHEDRAL
-    @enum TYPE begin
-        phi   = -2
-        psi   = -1
-        omega =  0
-        chi1  =  1
-        chi2  =  2
-        chi3  =  3
-        chi4  =  4
-        chi5  =  5
-    end
-end
+# module DIHEDRAL
+#     @enum TYPE begin
+#         phi   = -2
+#         psi   = -1
+#         omega =  0
+#         chi1  =  1
+#         chi2  =  2
+#         chi3  =  3
+#         chi4  =  4
+#         chi5  =  5
+#     end
+# end
 
 
 @doc raw"""
@@ -40,10 +40,18 @@ mutable struct Dihedral
     a3::Int64
     a4::Int64
     movable::Vector{Int64}
-    residue::Residue
-    dtype::DIHEDRAL.TYPE
+    #residue::Residue
+    # type::DIHEDRAL.TYPE
+    type::Enum{T<:Integer}
 end
-Base.show(io::IO, b::Dihedral) = print(io, "Dihedral(a1=$(b.a1), a2=$(b.a2), a3=$(b.a3), a4=$(b.a4), movable=$(b.movable), residue=$(b.residue), type=$(b.dtype))")
+# Base.show(io::IO, b::Dihedral) = print(io, "Dihedral(a1=$(b.a1), a2=$(b.a2), a3=$(b.a3), a4=$(b.a4), movable=$(b.movable), residue=$(b.residue), type=$(b.dtype))")
+function Base.show(io::IO, b::Dihedral)
+    print(io, string(typeof(b)))
+    for p in fieldnames(typeof(b))
+        val = getproperty(b,p)
+        print(io, "\n   $(String(p)) = $(val)")
+    end
+end
 
 
 @doc raw"""
@@ -125,3 +133,66 @@ function rotate_dihedral_to!(xyz::Array{Float64, 2}, dihedral::Dihedral, target_
     # Apply displacement and rotate
     rotate_dihedral!(xyz, dihedral, displacement)
 end
+
+using Base.Cartesian
+
+function rotate!(xyz::Array{Float64, 2}, dihedral::Dihedral, angle::Float64, tree::SpanningTree)
+    a2 = dihedral.a2
+    a3 = dihedral.a3
+    
+    lastidx = getindex(tree, a3)
+
+    #pivot = @view xyz[a3,:]
+    #axis = @view(xyz[a2,:]) - pivot
+
+    axis = [0.0, 0.0, 0.0]
+    # ox = xyz[a3,1]
+    # oy = xyz[a3,2]
+    # oz = xyz[a3,3]
+    # axis[1] = xyz[a2,1] - ox
+    # axis[2] = xyz[a2,2] - oy
+    # axis[3] = xyz[a2,3] - oz
+    @nexprs 3 k -> o_k = xyz[a3,k]
+    @nexprs 3 k -> axis[k] = xyz[a2,k] - o_k
+    R = Aux.rotation_matrix_from_axis_angle(axis, angle)
+
+    @inbounds for i=1:lastidx
+        j = tree.indices[i]
+        
+        @nexprs 3 k -> x_k = xyz[j,k]-o_k
+        # x_1 = xyz[j,1] - o_1
+        # x_2 = xyz[j,2] - o_2
+        # x_3 = xyz[j,3] - o_3
+        @nexprs 3 k -> xyz[j,k] = R[k,1]*x_1 + R[k,2]*x_2 + R[k,3]*x_3 + o_k
+        # xyz[j,1] = rmat[1,1]*x_1 + rmat[1,2]*x_2 + rmat[1,3]*x_3 + o_1
+        # xyz[j,2] = rmat[2,1]*x_1 + rmat[2,2]*x_2 + rmat[2,3]*x_3 + o_2
+        # xyz[j,3] = rmat[3,1]*x_1 + rmat[3,2]*x_2 + rmat[3,3]*x_3 + o_3
+
+
+    end
+
+end
+
+
+function rotate!(xyz::Array{Float64, 2}, dihedral::Dihedral, 
+    angle::Float64, tree::SpanningTree, R::Array{Float64, 2})
+    a2 = dihedral.a2
+    a3 = dihedral.a3
+    
+    axis = [0.0, 0.0, 0.0]
+    @nexprs 3 k -> o_k = xyz[a3,k]
+    @nexprs 3 k -> axis[k] = xyz[a2,k] - o_k
+    R = Aux.rotation_matrix_from_axis_angle(axis, angle, R)
+    
+    lastidx = getindex(tree, a3)
+    @inbounds for i=1:lastidx
+        j = tree.indices[i]
+    #lastidx = size(dihedral.movable,1)
+    #@inbounds for i=1:lastidx
+    #    j = dihedral.movable[i]
+        @nexprs 3 k -> x_k = xyz[j,k]-o_k
+        @nexprs 3 k -> xyz[j,k] = R[k,1]*x_1 + R[k,2]*x_2 + R[k,3]*x_3 + o_k
+    end
+    xyz
+end
+
